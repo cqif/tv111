@@ -1,18 +1,18 @@
 /* eslint-disable no-console, @typescript-eslint/no-explicit-any, @typescript-eslint/no-non-null-assertion */
 
 import { AdminConfig } from './admin.types';
-import { D1Storage } from './d1.db';
+import { KvrocksStorage } from './kvrocks.db';
 import { RedisStorage } from './redis.db';
 import { Favorite, IStorage, PlayRecord, SkipConfig } from './types';
 import { UpstashRedisStorage } from './upstash.db';
 
-// storage type 常量: 'localstorage' | 'redis' | 'd1' | 'upstash'，默认 'localstorage'
+// storage type 常量: 'localstorage' | 'redis' | 'upstash'，默认 'localstorage'
 const STORAGE_TYPE =
   (process.env.NEXT_PUBLIC_STORAGE_TYPE as
     | 'localstorage'
     | 'redis'
-    | 'd1'
     | 'upstash'
+    | 'kvrocks'
     | undefined) || 'localstorage';
 
 // 创建存储实例
@@ -22,11 +22,10 @@ function createStorage(): IStorage {
       return new RedisStorage();
     case 'upstash':
       return new UpstashRedisStorage();
-    case 'd1':
-      return new D1Storage();
+    case 'kvrocks':
+      return new KvrocksStorage();
     case 'localstorage':
     default:
-      // 默认返回内存实现，保证本地开发可用
       return null as unknown as IStorage;
   }
 }
@@ -34,7 +33,7 @@ function createStorage(): IStorage {
 // 单例存储实例
 let storageInstance: IStorage | null = null;
 
-export function getStorage(): IStorage {
+function getStorage(): IStorage {
   if (!storageInstance) {
     storageInstance = createStorage();
   }
@@ -147,6 +146,14 @@ export class DbManager {
     return this.storage.checkUserExist(userName);
   }
 
+  async changePassword(userName: string, newPassword: string): Promise<void> {
+    await this.storage.changePassword(userName, newPassword);
+  }
+
+  async deleteUser(userName: string): Promise<void> {
+    await this.storage.deleteUser(userName);
+  }
+
   // ---------- 搜索历史 ----------
   async getSearchHistory(userName: string): Promise<string[]> {
     return this.storage.getSearchHistory(userName);
@@ -222,6 +229,15 @@ export class DbManager {
       return (this.storage as any).getAllSkipConfigs(userName);
     }
     return {};
+  }
+
+  // ---------- 数据清理 ----------
+  async clearAllData(): Promise<void> {
+    if (typeof (this.storage as any).clearAllData === 'function') {
+      await (this.storage as any).clearAllData();
+    } else {
+      throw new Error('存储类型不支持清空数据操作');
+    }
   }
 }
 
